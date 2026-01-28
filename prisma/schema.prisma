@@ -1,0 +1,165 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  member        Member?
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum RelationToHead {
+  HEAD
+  SON
+  DAUGHTER
+  BROTHER
+  SISTER
+  FATHER
+  MOTHER
+  GRANDFATHER
+  GRANDMOTHER
+  DAUGHTERINLAW
+}
+
+model Member {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name     String
+  email    String?
+  photoUrl String?
+
+  gender    Gender?
+  dob       DateTime?
+  phone     String?
+  address   String?
+  education String?
+  job       String?
+  business  String?
+
+  isHead           Boolean         @default(false)
+  relationToHead   RelationToHead?
+  profileCompleted Boolean         @default(false)
+
+  familyId String?
+  family   Family? @relation("FamilyMembers", fields: [familyId], references: [id], onDelete: SetNull)
+
+  headOfFamily Family? @relation("FamilyHead")
+
+  villageId String?
+  village   Village? @relation(fields: [villageId], references: [id], onDelete: SetNull)
+
+  addedById    String?
+  addedBy      Member?  @relation("AddedMembers", fields: [addedById], references: [id], onDelete: SetNull)
+  addedMembers Member[] @relation("AddedMembers")
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([familyId])
+  @@index([villageId])
+}
+
+model Family {
+  id        String @id @default(uuid())
+  name      String
+  headId    String @unique
+  villageId String
+
+  head    Member   @relation("FamilyHead", fields: [headId], references: [id], onDelete: Cascade)
+  members Member[] @relation("FamilyMembers")
+
+  village Village @relation(fields: [villageId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Village {
+  id   String @id @default(uuid())
+  name String @unique
+
+  families Family[]
+  members  Member[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
