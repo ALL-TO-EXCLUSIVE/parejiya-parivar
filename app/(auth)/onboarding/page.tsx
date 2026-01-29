@@ -1,40 +1,11 @@
-"use client";
+// app/onboarding/page.tsx
+import { OnboardingForm } from "@/components/forms/OnBoardingForm";
 
-import { useState } from "react";
-
-export default function OnboardingForm() {
-    const [isHead, setIsHead] = useState(false);
-    const [name, setName] = useState("");
-    const [villageId, setVillageId] = useState("");
-
-    async function submit() {
-        await fetch("/api/onboarding", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                name,
-                villageId,
-                isHead,
-            }),
-        });
-
-        window.location.href = "/dashboard";
-    }
-
+export default function OnboardingPage() {
     return (
         <div>
-            <input value={name} onChange={e => setName(e.target.value)} />
-            <select onChange={e => setVillageId(e.target.value)} />
-            <label>
-                <input
-                    type="checkbox"
-                    checked={isHead}
-                    onChange={e => setIsHead(e.target.checked)}
-                />
-                Are you head?
-            </label>
-
-            <button onClick={submit}>Continue</button>
+            <h1>Complete your profile</h1>
+            <OnboardingForm />
         </div>
     );
 }
