@@ -1,14 +1,15 @@
-// types/profile.ts
 import { Gender, RelationToHead } from "./enums";
+import { Village } from "./village";
 
 /**
  * Returned by GET /me
+ * Server-safe profile DTO
  */
 export type MyProfile = {
     id: string;
 
     name: string;
-    email: string;
+    email: string | null;
 
     gender: Gender | null;
     dob: string | null;
@@ -24,7 +25,16 @@ export type MyProfile = {
     profileCompleted: boolean;
 
     familyId: string | null;
+    family: {
+        id: string;
+        name: string;
+        headId: string;
+        villageId: string;
+    } | null;
+
     villageId: string | null;
+    village: Village | null;
+
     relationToHead: RelationToHead | null;
 
     createdAt: string;

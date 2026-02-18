@@ -3,21 +3,24 @@ import prisma from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 
 export async function POST(req: Request) {
-    // 1. Auth
+    // 1. AUTH
     const session = await auth.api.getSession({
         headers: req.headers,
     });
 
     if (!session?.user) {
         return NextResponse.json(
-            { success: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } },
+            {
+                success: false,
+                error: { code: "UNAUTHORIZED", message: "Not authenticated" },
+            },
             { status: 401 }
         );
     }
 
     const userId = session.user.id;
 
-    // 2. Parse body
+    // 2. BODY VALIDATION
     const body = await req.json();
     const { name, villageId, isHead } = body;
 
@@ -28,41 +31,74 @@ export async function POST(req: Request) {
         typeof isHead !== "boolean"
     ) {
         return NextResponse.json(
-            { success: false, error: { code: "BAD_REQUEST", message: "Invalid input" } },
+            {
+                success: false,
+                error: { code: "BAD_REQUEST", message: "Invalid input" },
+            },
             { status: 400 }
         );
     }
 
-    // 3. Ensure village exists
+    // 3. VILLAGE EXISTS
     const village = await prisma.village.findUnique({
         where: { id: villageId },
     });
 
     if (!village) {
         return NextResponse.json(
-            { success: false, error: { code: "INVALID_VILLAGE", message: "Village not found" } },
+            {
+                success: false,
+                error: { code: "INVALID_VILLAGE", message: "Village not found" },
+            },
             { status: 400 }
         );
     }
 
-    // 4. Check existing member
+    // 4. EXISTING MEMBER CHECK
     const existingMember = await prisma.member.findUnique({
         where: { userId },
     });
 
     if (existingMember?.profileCompleted) {
         return NextResponse.json(
-            { success: false, error: { code: "ALREADY_ONBOARDED", message: "Profile already completed" } },
+            {
+                success: false,
+                error: {
+                    code: "ALREADY_ONBOARDED",
+                    message: "Profile already completed",
+                },
+            },
             { status: 409 }
         );
     }
 
-    // 5. Transaction (important)
-    await prisma.$transaction(async (tx) => {
-        let member = existingMember;
+    // 5. PREVENT HEAD DOWNGRADE
+    if (existingMember?.isHead && !isHead) {
+        return NextResponse.json(
+            {
+                success: false,
+                error: {
+                    code: "INVALID_OPERATION",
+                    message: "Family head cannot be downgraded",
+                },
+            },
+            { status: 409 }
+        );
+    }
 
-        if (!member) {
-            member = await tx.member.create({
+    // 6. TRANSACTION
+    await prisma.$transaction(async (tx) => {
+        // A. UPSERT MEMBER
+        const member = existingMember
+            ? await tx.member.update({
+                where: { id: existingMember.id },
+                data: {
+                    name: name.trim(),
+                    villageId,
+                    isHead,
+                },
+            })
+            : await tx.member.create({
                 data: {
                     userId,
                     name: name.trim(),
@@ -70,37 +106,33 @@ export async function POST(req: Request) {
                     isHead,
                 },
             });
-        } else {
-            member = await tx.member.update({
-                where: { id: member.id },
-                data: {
-                    name: name.trim(),
-                    villageId,
-                    isHead,
-                },
-            });
-        }
 
-        // 6. If head → create family
+        // B. HANDLE FAMILY (ONLY ONCE)
         if (isHead) {
-            const family = await tx.family.create({
-                data: {
-                    name: `${name.trim()}'s Family`,
-                    headId: member.id,
-                    villageId,
-                },
+            const existingFamily = await tx.family.findUnique({
+                where: { headId: member.id },
             });
 
-            await tx.member.update({
-                where: { id: member.id },
-                data: {
-                    familyId: family.id,
-                    relationToHead: "HEAD",
-                },
-            });
+            if (!existingFamily) {
+                const family = await tx.family.create({
+                    data: {
+                        name: `${name.trim()}'s Family`,
+                        headId: member.id,
+                        villageId,
+                    },
+                });
+
+                await tx.member.update({
+                    where: { id: member.id },
+                    data: {
+                        familyId: family.id,
+                        relationToHead: "HEAD",
+                    },
+                });
+            }
         }
 
-        // 7. Mark profile completed
+        // C. MARK PROFILE COMPLETE (FINAL STATE)
         await tx.member.update({
             where: { id: member.id },
             data: {
@@ -109,6 +141,7 @@ export async function POST(req: Request) {
         });
     });
 
+    // 7. RESPONSE
     return NextResponse.json({
         success: true,
         data: { completed: true },

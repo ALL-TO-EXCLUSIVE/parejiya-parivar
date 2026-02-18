@@ -11,7 +11,8 @@ export default async function DashboardLayout({
     if (!user) redirect("/login");
 
     const profile = await getMyProfile();
-    if (!profile || !profile.profileCompleted) {
+
+    if (!profile?.profileCompleted) {
         redirect("/onboarding");
     }
 
